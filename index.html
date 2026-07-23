@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NUS Chem Bingo — Organizer</title>
+<style>
+  :root{
+    --forest:#1e3a24;
+    --forest-deep:#132818;
+    --cream:#fdfaf3;
+    --pink:#f3b6c9;
+    --yellow:#f5df5a;
+    --ink:#1b2a1e;
+    --pending:#f0a94e;
+    --approved:#5a9e6f;
+    --redo:#d9645f;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    background:var(--forest);
+    color:var(--cream);
+    min-height:100vh;
+  }
+  .wrap{max-width:640px;margin:0 auto;padding:20px 16px 60px;}
+  h1{
+    font-size:1.6rem;
+    letter-spacing:0.5px;
+    color:var(--yellow);
+    text-align:center;
+    margin:6px 0 2px;
+    font-weight:800;
+  }
+  .sub{text-align:center;color:var(--pink);font-size:0.85rem;margin-bottom:22px;font-weight:600;}
+  .card{
+    background:var(--cream);
+    color:var(--ink);
+    border-radius:14px;
+    padding:18px;
+    margin-bottom:14px;
+    box-shadow:0 4px 0 rgba(0,0,0,0.15);
+  }
+  .btn{
+    display:block;
+    width:100%;
+    padding:14px;
+    border:none;
+    border-radius:10px;
+    font-size:1rem;
+    font-weight:700;
+    cursor:pointer;
+    margin-top:10px;
+    background:var(--forest);
+    color:var(--cream);
+  }
+  .btn.approve{background:var(--approved);color:#fff;}
+  .btn.reject{background:var(--redo);color:#fff;}
+  .team-list-item{
+    display:flex;justify-content:space-between;align-items:center;
+    padding:10px 12px;border-radius:8px;background:#fff;margin-top:8px;
+    border:2px solid transparent;cursor:pointer;
+  }
+  .team-list-item:hover{border-color:var(--forest);}
+  .progress{font-size:0.85rem;color:#555;}
+  .grid{
+    display:grid;
+    grid-template-columns:repeat(5,1fr);
+    gap:6px;
+    margin-top:14px;
+  }
+  .tile{
+    aspect-ratio:1/1;
+    border-radius:8px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    text-align:center;
+    font-size:0.62rem;
+    line-height:1.15;
+    padding:5px;
+    font-weight:700;
+    cursor:pointer;
+    position:relative;
+    overflow:hidden;
+    color:#fff;
+    background:#8a8a8a;
+    border:2px solid rgba(0,0,0,0.1);
+  }
+  .tile.free{background:var(--pink);color:var(--ink);}
+  .tile.pending{background:var(--pending);}
+  .tile.approved{background:var(--approved);}
+  .tile img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:0.35;}
+  .tile span{position:relative;z-index:1;}
+  .badge{
+    position:absolute;top:3px;right:4px;font-size:0.9rem;z-index:2;
+  }
+  .top-nav{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;}
+  .top-nav button{background:none;border:none;color:var(--pink);font-weight:700;cursor:pointer;font-size:0.9rem;}
+  .review-photo{width:100%;border-radius:10px;margin:10px 0;max-height:320px;object-fit:cover;}
+  .warn{font-size:0.8rem;color:#a33;margin-top:8px;}
+</style>
+</head>
+<body>
+<div class="wrap" id="app"></div>
+
+<script>
+// PASTE your Apps Script Web App URL here (see AppsScript-Backend.gs setup steps)
+const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzq3mdnZo8R1vdkHKIfKQ6bxDz8IXCnxMqV6xpRho9ER5FMBFgwa7nKuX0Oeh5pEkrzNA/exec";
+
+const TASKS = [
+  "A photo with someone you met since Y1SI",
+  "A photo with the event IC",
+  "Recreate your \"finally graduating\" pose",
+  "A photo with a non-graduating person",
+  "A photo with someone of the same age",
+  "Take a group photo doing a funny pose",
+  "Take a group photo mock-throwing your graduation cap",
+  "Photo with someone born in the same month as you",
+  "Take a photo doing a dramatic \"goodbye lab\" salute",
+  "Take a photo doing a victory fist-pump, like acing your last practical",
+  "Who is your favourite lecturer? (photo with them or pointing at their name)",
+  "Recreate this pose (see reference bingo card)",
+  "FREE SPACE",
+  "Recreate this pose (see reference bingo card)",
+  "A photo with a new friend you met today",
+  "Form a molecule (1 person = 1 atom)",
+  "Recreate this pose (see reference bingo card)",
+  "A photo with a faculty member",
+  "Eating together",
+  "Is wearing the same colored outfit as you",
+  "Recreate this pose (see reference bingo card)",
+  "Photo with someone whose age matches proton number 26 (hint: Iron)",
+  "Take a group photo lined up like elements in the periodic table",
+  "Recreate this pose (see reference bingo card)",
+  "Take a photo doing a triumphant \"lab report submitted!\" pose"
+];
+const FREE_INDEX = 12;
+
+const app = document.getElementById('app');
+let state = { view: 'organizer-list', teamName: null, pollTimer: null };
+
+async function callApi(action, payload){
+  payload = payload || {};
+  try{
+    const res = await fetch(APPS_SCRIPT_URL, {
+      method: 'POST',
+      body: JSON.stringify(Object.assign({ action: action }, payload))
+    });
+    return await res.json();
+  }catch(e){
+    console.error('API call failed', e);
+    return { error: 'network' };
+  }
+}
+
+function urlConfigured(){
+  return APPS_SCRIPT_URL && APPS_SCRIPT_URL.indexOf('PASTE_') === -1;
+}
+
+function render(){
+  if (!urlConfigured()){
+    app.innerHTML = `
+      <h1>NUS Chem Bingo</h1>
+      <div class="card">
+        <p><strong>Setup needed:</strong> this page isn't connected to your Google Sheet yet.</p>
+        <p class="warn">Open this file, replace APPS_SCRIPT_URL near the top with your Apps Script Web App URL, and re-publish.</p>
+      </div>`;
+    return;
+  }
+  if (state.view === 'organizer-list') return renderOrganizerList();
+  if (state.view === 'organizer-team') return renderOrganizerTeam();
+}
+
+async function renderOrganizerList(){
+  const rows = await callApi('listAllTeamsSummary');
+  const list = Array.isArray(rows) ? rows : [];
+  app.innerHTML = `
+    <div class="top-nav"><span>&nbsp;</span><button id="refresh">Refresh</button></div>
+    <h1>Organizer Dashboard</h1>
+    <div class="sub">${list.length} team(s) registered</div>
+    <div class="card">
+      ${list.length===0 ? '<p>No teams have joined yet.</p>' : list.map(r => `
+        <div class="team-list-item" data-team="${r.name}">
+          <span>${r.name}</span>
+          <span class="progress">${r.approved}/25 ✅ &nbsp; ${r.pending>0? r.pending+' ⏳ pending':''}</span>
+        </div>
+      `).join('')}
+    </div>
+  `;
+  document.getElementById('refresh').onclick = () => render();
+  app.querySelectorAll('.team-list-item').forEach(el => {
+    el.onclick = () => { state.teamName = el.dataset.team; state.view = 'organizer-team'; render(); };
+  });
+}
+
+async function renderOrganizerTeam(){
+  app.innerHTML = `<div class="card"><p>Loading ${state.teamName}'s board...</p></div>`;
+  const data = await callApi('getTeam', { teamName: state.teamName });
+  const tiles = (data && data.tiles) ? data.tiles : {};
+  tiles[FREE_INDEX] = { status: 'approved', photoUrl: null };
+  const approvedCount = Object.values(tiles).filter(t => t.status === 'approved').length;
+
+  app.innerHTML = `
+    <div class="top-nav"><button id="back">&larr; All teams</button><span>${approvedCount}/25 approved</span></div>
+    <h1>${state.teamName}</h1>
+    <div class="sub">Tap a pending tile to review</div>
+    <div class="grid" id="grid"></div>
+  `;
+  const grid = document.getElementById('grid');
+  TASKS.forEach((task, i) => {
+    const t = tiles[i];
+    const div = document.createElement('div');
+    let cls = 'tile';
+    if (i === FREE_INDEX) cls += ' free';
+    else if (t && t.status === 'pending') cls += ' pending';
+    else if (t && t.status === 'approved') cls += ' approved';
+    div.className = cls;
+    div.innerHTML = `${t && t.photoUrl ? `<img src="${t.photoUrl}">` : ''}<span>${task}</span>${t && t.status==='approved' ? '<span class="badge">✅</span>' : ''}${t && t.status==='pending' ? '<span class="badge">⏳</span>' : ''}`;
+    if (t && t.status === 'pending'){
+      div.onclick = () => openReview(i, t, task);
+    }
+    grid.appendChild(div);
+  });
+  document.getElementById('back').onclick = () => { state.view = 'organizer-list'; render(); };
+}
+
+function openReview(index, tileData, taskText){
+  app.innerHTML = `
+    <div class="top-nav"><button id="back">&larr; Cancel</button><span></span></div>
+    <h1>Review Photo</h1>
+    <div class="card">
+      <p style="font-weight:700">${taskText}</p>
+      <img class="review-photo" src="${tileData.photoUrl}">
+      <button class="btn approve" id="approveBtn">✅ Approve</button>
+      <button class="btn reject" id="rejectBtn">❌ Reject &amp; ask redo</button>
+    </div>
+  `;
+  document.getElementById('back').onclick = () => { state.view = 'organizer-team'; render(); };
+  document.getElementById('approveBtn').onclick = async () => {
+    await callApi('approveTile', { teamName: state.teamName, tileIndex: index });
+    state.view = 'organizer-team'; render();
+  };
+  document.getElementById('rejectBtn').onclick = async () => {
+    await callApi('rejectTile', { teamName: state.teamName, tileIndex: index });
+    state.view = 'organizer-team'; render();
+  };
+}
+
+function startPolling(){
+  stopPolling();
+  state.pollTimer = setInterval(() => {
+    if (state.view === 'organizer-list' || state.view === 'organizer-team') render();
+  }, 6000);
+}
+function stopPolling(){
+  if (state.pollTimer) clearInterval(state.pollTimer);
+  state.pollTimer = null;
+}
+
+render();
+startPolling();
+</script>
+</body>
+</html>
