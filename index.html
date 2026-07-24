@@ -139,7 +139,11 @@ const TASKS = [
 const FREE_INDEX = 12;
 
 const app = document.getElementById('app');
-let state = { view: 'organizer-list', teamName: null, pollTimer: null };
+const urlParams = new URLSearchParams(window.location.search);
+const savedTeam = urlParams.get('team');
+let state = savedTeam
+  ? { view: 'organizer-team', teamName: savedTeam, pollTimer: null }
+  : { view: 'organizer-list', teamName: null, pollTimer: null };
 
 async function callApi(action, payload){
   payload = payload || {};
@@ -184,14 +188,32 @@ async function renderOrganizerList(){
       ${list.length===0 ? '<p>No teams have joined yet.</p>' : list.map(r => `
         <div class="team-list-item" data-team="${r.name}">
           <span>${r.name}</span>
-          <span class="progress">${r.approved}/25 ✅ &nbsp; ${r.pending>0? r.pending+' ⏳ pending':''}</span>
+          <span style="display:flex;align-items:center;gap:10px;">
+            <span class="progress">${r.approved}/25 ✅ &nbsp; ${r.pending>0? r.pending+' ⏳ pending':''}</span>
+            <button class="delete-btn" data-team-delete="${r.name}" style="background:var(--redo);color:#fff;border:none;border-radius:6px;padding:5px 8px;font-size:0.75rem;cursor:pointer;">🗑</button>
+          </span>
         </div>
       `).join('')}
     </div>
   `;
   document.getElementById('refresh').onclick = () => render();
   app.querySelectorAll('.team-list-item').forEach(el => {
-    el.onclick = () => { state.teamName = el.dataset.team; state.view = 'organizer-team'; render(); };
+    el.onclick = () => {
+      const name = el.dataset.team;
+      state.teamName = name; state.view = 'organizer-team';
+      history.replaceState(null, '', '?team=' + encodeURIComponent(name));
+      render();
+    };
+  });
+  app.querySelectorAll('[data-team-delete]').forEach(btn => {
+    btn.onclick = async (e) => {
+      e.stopPropagation();
+      const name = btn.dataset.teamDelete;
+      if (!confirm(`Delete "${name}" and all their submitted photos? This can't be undone.`)) return;
+      btn.textContent = '...'; btn.disabled = true;
+      await callApi('deleteTeam', { teamName: name });
+      render();
+    };
   });
 }
 
@@ -223,7 +245,11 @@ async function renderOrganizerTeam(){
     }
     grid.appendChild(div);
   });
-  document.getElementById('back').onclick = () => { state.view = 'organizer-list'; render(); };
+  document.getElementById('back').onclick = () => {
+    state.view = 'organizer-list'; state.teamName = null;
+    history.replaceState(null, '', window.location.pathname);
+    render();
+  };
 }
 
 function openReview(index, tileData, taskText){
