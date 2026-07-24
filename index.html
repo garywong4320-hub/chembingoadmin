@@ -278,7 +278,7 @@ function startPolling(){
   stopPolling();
   state.pollTimer = setInterval(() => {
     if (state.view === 'organizer-list' || state.view === 'organizer-team') render();
-  }, 10000);
+  }, 45000);
 }
 function stopPolling(){
   if (state.pollTimer) clearInterval(state.pollTimer);
