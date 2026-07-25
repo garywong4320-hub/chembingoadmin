@@ -316,7 +316,7 @@ function startPolling(){
   stopPolling();
   // Jittered interval (45-55s) so if you have multiple organizers
   // reviewing at once, they don't all poll on the exact same tick.
-  const interval = 45000 + Math.random() * 10000;
+  const interval = 450000 + Math.random() * 10000;
   state.pollTimer = setInterval(() => {
     if (state.view === 'organizer-list' || state.view === 'organizer-team') render();
   }, interval);
