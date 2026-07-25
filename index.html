@@ -145,17 +145,36 @@ let state = savedTeam
   ? { view: 'organizer-team', teamName: savedTeam, pollTimer: null }
   : { view: 'organizer-list', teamName: null, pollTimer: null };
 
-async function callApi(action, payload){
+function sleep_(ms){ return new Promise(resolve => setTimeout(resolve, ms)); }
+
+// Retries with exponential backoff + jitter on network failure or a
+// {error:'busy'} response (the backend returns 'busy' when it can't
+// grab its write lock within 8s — happens only during real bursts).
+async function callApi(action, payload, maxRetries){
   payload = payload || {};
-  try{
-    const res = await fetch(APPS_SCRIPT_URL, {
-      method: 'POST',
-      body: JSON.stringify(Object.assign({ action: action }, payload))
-    });
-    return await res.json();
-  }catch(e){
-    console.error('API call failed', e);
-    return { error: 'network' };
+  maxRetries = maxRetries == null ? 4 : maxRetries;
+  for (let attempt = 0; attempt <= maxRetries; attempt++){
+    try{
+      const res = await fetch(APPS_SCRIPT_URL, {
+        method: 'POST',
+        body: JSON.stringify(Object.assign({ action: action }, payload))
+      });
+      const json = await res.json();
+      if (json && json.error === 'busy' && attempt < maxRetries){
+        const base = Math.min(1000 * Math.pow(2, attempt), 8000);
+        await sleep_(base / 2 + Math.random() * base / 2);
+        continue;
+      }
+      return json;
+    }catch(e){
+      if (attempt < maxRetries){
+        const base = Math.min(1000 * Math.pow(2, attempt), 8000);
+        await sleep_(base / 2 + Math.random() * base / 2);
+        continue;
+      }
+      console.error('API call failed after retries', action, e);
+      return { error: 'network' };
+    }
   }
 }
 
@@ -211,7 +230,12 @@ async function renderOrganizerList(){
       const name = btn.dataset.teamDelete;
       if (!confirm(`Delete "${name}" and all their submitted photos? This can't be undone.`)) return;
       btn.textContent = '...'; btn.disabled = true;
-      await callApi('deleteTeam', { teamName: name });
+      const result = await callApi('deleteTeam', { teamName: name });
+      if (!result || result.error){
+        alert('Delete failed (connection issue) — please try again.');
+        btn.textContent = '🗑'; btn.disabled = false;
+        return;
+      }
       render();
     };
   });
@@ -265,20 +289,37 @@ function openReview(index, tileData, taskText){
   `;
   document.getElementById('back').onclick = () => { state.view = 'organizer-team'; render(); };
   document.getElementById('approveBtn').onclick = async () => {
-    await callApi('approveTile', { teamName: state.teamName, tileIndex: index });
+    const btn = document.getElementById('approveBtn');
+    btn.disabled = true; btn.textContent = 'Approving...';
+    const result = await callApi('approveTile', { teamName: state.teamName, tileIndex: index });
+    if (!result || result.error){
+      alert('Approve failed (connection issue) — please try again.');
+      btn.disabled = false; btn.textContent = '✅ Approve';
+      return;
+    }
     state.view = 'organizer-team'; render();
   };
   document.getElementById('rejectBtn').onclick = async () => {
-    await callApi('rejectTile', { teamName: state.teamName, tileIndex: index });
+    const btn = document.getElementById('rejectBtn');
+    btn.disabled = true; btn.textContent = 'Rejecting...';
+    const result = await callApi('rejectTile', { teamName: state.teamName, tileIndex: index });
+    if (!result || result.error){
+      alert('Reject failed (connection issue) — please try again.');
+      btn.disabled = false; btn.textContent = '❌ Reject & ask redo';
+      return;
+    }
     state.view = 'organizer-team'; render();
   };
 }
 
 function startPolling(){
   stopPolling();
+  // Jittered interval (45-55s) so if you have multiple organizers
+  // reviewing at once, they don't all poll on the exact same tick.
+  const interval = 45000 + Math.random() * 10000;
   state.pollTimer = setInterval(() => {
     if (state.view === 'organizer-list' || state.view === 'organizer-team') render();
-  }, 45000);
+  }, interval);
 }
 function stopPolling(){
   if (state.pollTimer) clearInterval(state.pollTimer);
