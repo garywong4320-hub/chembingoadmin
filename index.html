@@ -108,7 +108,7 @@
 
 <script>
 // PASTE your Apps Script Web App URL here (see AppsScript-Backend.gs setup steps)
-const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxe0qcs63ynGIQYnI13dgndPatQuTUPTa525H2T5wtjeFm0lD6pd_OdN2LS9yQB1LeU/exec";
+const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyIBuAcwiWhTy3340fpeLFgLK737i88hmWZ6Cssh7pQ-47QoFS9B6Ly-9ygIFUKrdpd/exec";
 
 const TASKS = [
   "Recreate this pose (see reference bingo card)",
@@ -186,7 +186,7 @@ function urlConfigured(){
 function render(){
   if (!urlConfigured()){
     app.innerHTML = `
-      <h1>NUS Chem Bingo</h1>
+      <h1>CSS AGM Bingo</h1>
       <div class="card">
         <p><strong>Setup needed:</strong> this page isn't connected to your Google Sheet yet.</p>
         <p class="warn">Open this file, replace APPS_SCRIPT_URL near the top with your Apps Script Web App URL, and re-publish.</p>
