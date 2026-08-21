@@ -107,7 +107,6 @@
 <div class="wrap" id="app"></div>
 
 <script>
-// PASTE your Apps Script Web App URL here (see AppsScript-Backend.gs setup steps)
 const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxn_ZMYj-O_z-JOvXQpuel6uVaOG3zFGl3O2KAPuG70vYyyxk8sQZ9FQaTa8erwckNF/exec";
 
 const TASKS = [
@@ -143,14 +142,11 @@ const app = document.getElementById('app');
 const urlParams = new URLSearchParams(window.location.search);
 const savedTeam = urlParams.get('team');
 let state = savedTeam
-  ? { view: 'organizer-team', teamName: savedTeam, pollTimer: null }
-  : { view: 'organizer-list', teamName: null, pollTimer: null };
+  ? { view: 'organizer-team', teamName: savedTeam }
+  : { view: 'organizer-list', teamName: null };
 
 function sleep_(ms){ return new Promise(resolve => setTimeout(resolve, ms)); }
 
-// Retries with exponential backoff + jitter on network failure or a
-// {error:'busy'} response (the backend returns 'busy' when it can't
-// grab its write lock within 8s — happens only during real bursts).
 async function callApi(action, payload, maxRetries){
   payload = payload || {};
   maxRetries = maxRetries == null ? 4 : maxRetries;
@@ -158,6 +154,9 @@ async function callApi(action, payload, maxRetries){
     try{
       const res = await fetch(APPS_SCRIPT_URL, {
         method: 'POST',
+        mode: 'cors',
+        redirect: 'follow',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
         body: JSON.stringify(Object.assign({ action: action }, payload))
       });
       const json = await res.json();
@@ -313,22 +312,7 @@ function openReview(index, tileData, taskText){
   };
 }
 
-function startPolling(){
-  stopPolling();
-  // Jittered interval (45-55s) so if you have multiple organizers
-  // reviewing at once, they don't all poll on the exact same tick.
-  const interval = 450000 + Math.random() * 10000;
-  state.pollTimer = setInterval(() => {
-    if (state.view === 'organizer-list' || state.view === 'organizer-team') render();
-  }, interval);
-}
-function stopPolling(){
-  if (state.pollTimer) clearInterval(state.pollTimer);
-  state.pollTimer = null;
-}
-
 render();
-startPolling();
 </script>
 </body>
 </html>
