@@ -149,26 +149,25 @@ function sleep_(ms){ return new Promise(resolve => setTimeout(resolve, ms)); }
 
 async function callApi(action, payload, maxRetries){
   payload = payload || {};
-  maxRetries = maxRetries == null ? 3 : maxRetries;
+  maxRetries = maxRetries == null ? 4 : maxRetries;
   for (let attempt = 0; attempt <= maxRetries; attempt++){
     try{
       const res = await fetch(APPS_SCRIPT_URL, {
         method: 'POST',
-        mode: 'cors',
         redirect: 'follow',
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
         body: JSON.stringify(Object.assign({ action: action }, payload))
       });
       const json = await res.json();
       if (json && json.error === 'busy' && attempt < maxRetries){
-        const base = Math.min(800 * Math.pow(2, attempt), 4000);
+        const base = Math.min(1000 * Math.pow(2, attempt), 8000);
         await sleep_(base / 2 + Math.random() * base / 2);
         continue;
       }
       return json;
     }catch(e){
       if (attempt < maxRetries){
-        const base = Math.min(800 * Math.pow(2, attempt), 4000);
+        const base = Math.min(1000 * Math.pow(2, attempt), 8000);
         await sleep_(base / 2 + Math.random() * base / 2);
         continue;
       }
